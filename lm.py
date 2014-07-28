@@ -7,7 +7,7 @@ START = "<s>"
 END = "</s>"
 
 class LM:
-    def __init__(self,arpafile,ngram=2):
+    def __init__(self,arpafile,start=START,end=END,unk=UNK):
         """
         Load arpafile to get words and assign ids
         Unigram table indexed by word id into tuple of prob and backoff
@@ -15,7 +15,7 @@ class LM:
         """
         self.numWords = 0
         self.wordToInt = collections.defaultdict(lambda : -1)
-        self.unigrams = collections.defaultdict(int)
+        self.unigrams = {} 
         self.bigrams = collections.defaultdict(int)
         scale = math.log(10) #scale everything from log10 to ln
         count = 0
@@ -41,14 +41,17 @@ class LM:
                     break
                 key = (self.wordToInt[line[1]],self.wordToInt[line[2]])
                 self.bigrams[key] = scale*float(line[0])
+        self.start = self.wordToInt[start]
+        self.end = self.wordToInt[end]
+        self.unk = self.wordToInt[unk]
 
     def get_word_id(self,word):
         """
         Returns word id for words in vocab and UNK id otherwise.
         """
         id = self.wordToInt[word]
-        if id=="-1":
-            return self.wordToInt[UNK]
+        if id==-1:
+            return self.unk
         else:
             return id
 
@@ -72,16 +75,16 @@ class LM:
     def score(self,sentence):
         words = sentence.strip().split()
         val = 0.0
-        val += self.bg_prob(self.get_word_id(START),
-                    self.get_word_id(words[0]))
+        val += self.bg_prob(self.start,self.get_word_id(words[0]))
         for i in range(len(words)-1):
             val += self.bg_prob(self.get_word_id(words[i]),
                         self.get_word_id(words[i+1]))
-        val += self.bg_prob(self.get_word_id(words[-1]),
-                    self.get_word_id(END))
+        val += self.bg_prob(self.get_word_id(words[-1]),self.end)
         return val
 
 if __name__=='__main__':
-    lm = LM('lm_bg.arpa')
+    lm = LM('/afs/cs.stanford.edu/u/awni/wsj/ctc-utils/lm_bg.arpa')
+    print lm.wordToInt['ACCEPT']
     print lm.score("HELLO AGAIN")
+    print lm.score("HELLO ABDO")
 
