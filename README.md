@@ -18,6 +18,6 @@ wId = lm.get_word_id("HELLO")
 # Get the bigram probability of two words
 lm.get_bg(lm.get_word_id("HELLO"),lm.get_word_id("WORLD"))
 
-# Get the trigram probability of two words
+# Get the trigram probability of three words
 lm.get_tg(lm.start,lm.get_word_id("HELLO"),lm.end)
 ```
