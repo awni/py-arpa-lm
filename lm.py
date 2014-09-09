@@ -2,26 +2,32 @@ import collections
 import math
 
 NGRAM_T = '\\%d-grams'
-UNK = "<UNK>"
+UNK = "<unk>"
 START = "<s>"
 END = "</s>"
 
 class LM:
-    def __init__(self,arpafile,start=START,end=END,unk=UNK):
+    def __init__(self,arpafile=None,start=START,end=END,unk=UNK,fromFile=None):
         """
         Load arpafile to get words and assign ids
         Unigram table indexed by word id into tuple of prob and backoff
         Bigram table indexed by (word1id, word2id) -> prob
         """
+        if fromFile is not None:
+            self.from_file(fromFile)
+            return 
+
         fid = open(arpafile,'r')
-        self.read_header(fid) # read header
-        self.wordToInt = collections.defaultdict(lambda : -1)
-        self.unigrams = collections.defaultdict(lambda : (0.0,0.0))
-        self.bigrams = collections.defaultdict(int)
+        self.read_header(fid)
+        self.wordToInt = dict()
+        self.unigrams = dict()
+        self.bigrams = dict()
         self.scale = math.log(10) #scale everything from log10 to ln
         if self.isTrigram:
-            self.trigrams = collections.defaultdict(int)
-            self.bigrams = collections.defaultdict(lambda : (0.0,0.0))
+            self.trigrams = dict()
+            self.bigrams = dict()
+
+        self.dict_to_default_dict()
 
         self.load_ug(fid) # read unigram lm and word map, TODO provide list of allowed chars and scrub those not contained
         self.load_bg(fid) # read bigram lm
@@ -31,6 +37,25 @@ class LM:
         self.end = self.wordToInt[end]
         self.unk = self.wordToInt[unk]
         fid.close()
+
+    def dict_to_default_dict(self):
+        self.wordToInt = collections.defaultdict(lambda : -1,self.wordToInt)
+        self.unigrams = collections.defaultdict(lambda : (0.0,0.0),self.unigrams)
+        if self.isTrigram:
+            self.trigrams = collections.defaultdict(int,self.trigrams)
+            self.bigrams = collections.defaultdict(lambda : (0.0,0.0),self.bigrams)
+        else:
+            self.bigrams = collections.defaultdict(int,self.bigrams)
+
+    def default_dict_to_dict(self):
+        self.wordToInt = dict(self.wordToInt)
+        self.unigrams = dict(self.unigrams)
+        if self.isTrigram:
+            self.trigrams = dict(self.trigrams)
+            self.bigrams = dict(self.bigrams)
+        else:
+            self.bigrams = dict(self.bigrams)
+
 
     def read_header(self,fid):
         while fid.readline().strip() != "\\data\\":
@@ -61,7 +86,6 @@ class LM:
             else:
                 self.unigrams[count] = (self.scale*float(line[0]),0.0)
             count += 1
-
  
     def load_bg(self,fid):
         while NGRAM_T%2 not in fid.readline():
@@ -136,8 +160,8 @@ class LM:
             val += self.bigrams[(w2,w3)][0]
             # backoff to unigram
             if val == 0:
-                val += self.unigrams[w2][0]
-                val += self.unigrams[w1][1]
+                val += self.unigrams[w3][0]
+                val += self.unigrams[w2][1]
             val += self.bigrams[(w1,w2)][1]
         return val
 
@@ -147,7 +171,7 @@ class LM:
         val += self.bg_prob(self.start,words[0])
         for i in range(len(words)-1):
             val += self.bg_prob(words[i],words[i+1])
-        val += self.bg_prob(words[-1],self.end)
+        #val += self.bg_prob(words[-1],self.end)
         return val
 
     def score_tg(self,sentence):
@@ -165,9 +189,31 @@ class LM:
         val += self.tg_prob(self.start,words[0],w3)
         for i in range(len(words)-2):
             val += self.tg_prob(words[i],words[i+1],words[i+2])
-        if w3 != self.end:
-            val += self.tg_prob(w1,words[-1],self.end)
+        #if w3 != self.end:
+        #    val += self.tg_prob(w1,words[-1],self.end)
         return val
+
+    def to_file(self,file):
+        import cPickle as pickle
+        self.default_dict_to_dict()
+        with open(file,'w') as fid:
+            pickle.dump([self.isTrigram, self.start, self.end, self.unk, self.scale],fid)
+            pickle.dump(self.wordToInt,fid)
+            pickle.dump(self.unigrams,fid)
+            pickle.dump(self.bigrams,fid)
+            if self.isTrigram:
+                pickle.dump(self.trigrams,fid)
+
+    def from_file(self,file):
+        import cPickle as pickle
+        with open(file,'r') as fid:
+            self.isTrigram, self.start, self.end, self.unk, self.scale = pickle.load(fid)
+            self.wordToInt = pickle.load(fid)
+            self.unigrams = pickle.load(fid)
+            self.bigrams = pickle.load(fid)
+            if self.isTrigram:
+                self.trigrams = pickle.load(fid)
+        self.dict_to_default_dict()
 
 if __name__=='__main__':
 #    lm = LM('/afs/cs.stanford.edu/u/awni/wsj/ctc-utils/lm_bg.arpa')
